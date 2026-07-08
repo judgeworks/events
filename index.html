@@ -208,6 +208,7 @@ textarea{min-height:70px;resize:vertical}
     <button class="btn quiet" id="d-apple">&#63743; Maps route</button>
     <button class="btn quiet" id="d-google">G Maps route</button>
   </div>
+  <button class="btn quiet" id="d-share">&#8679; Share event</button>
   <button class="btn primary" id="d-edit">Edit</button>
   <button class="btn quiet" id="d-close">Close</button>
  </div>
@@ -290,12 +291,20 @@ function parseTime(t){
 const STREET=/\b\d+\s+\S+.*\b(street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|way|square|plaza|platz|stra(ss|ß)e|gasse|weg)\b/i;
 const STREET2=/(\S*(stra(ss|ß)e|gasse|platz|weg)|\b(street|avenue|road|boulevard|lane|square|plaza))\b.*\d+/i;
 function parseAddress(t){
-  for(const raw of t.split('\n')){
-    const line=raw.trim();
+  const lines=t.split('\n');
+  const clean=s=>s.replace(/[\s,;.]+$/,'').trim();
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i].trim();
     if(!line) continue;
-    if(line.startsWith('\u{1F4CD}')) return line.replace('\u{1F4CD}','').trim();     // 📍 line wins
-    if(/^(location|address|venue|where)\s*[:\-]/i.test(line)) return line.replace(/^[^:\-]*[:\-]/,'').trim();
-    if(STREET.test(line)||STREET2.test(line)) return line;
+    let hit='';
+    if(line.startsWith('\u{1F4CD}')) hit=line.replace('\u{1F4CD}','').trim();        // 📍 line wins
+    else if(/^(location|address|venue|where|ort|adresse)\s*[:\-]/i.test(line)) hit=line.replace(/^[^:\-]*[:\-]/,'').trim();
+    else if(STREET.test(line)||STREET2.test(line)) hit=line;
+    if(hit){
+      const next=(lines[i+1]||'').trim();
+      if(/^\d{4,5}(\s+\S.*)?$/.test(next)) hit=clean(hit)+', '+next;                 // postcode / postcode+city on next line
+      return clean(hit);
+    }
   }
   return '';
 }
@@ -309,10 +318,27 @@ function parseAll(text){
    GEOCODING — one anonymous lookup per saved address (OSM
    Nominatim, no key, no account). Manual pin always available.
    ========================================================= */
-async function geocode(addr){
-  const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(addr));
+const HOME_CITY='Berlin';                     // appended when a lookup fails — change if you move
+async function tryGeocode(q){
+  const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q));
   const j=await r.json();
-  if(j&&j[0]) return {lat:+j[0].lat,lng:+j[0].lon};
+  return (j&&j[0])?{lat:+j[0].lat,lng:+j[0].lon}:null;
+}
+async function geocode(addr){
+  const base=addr.replace(/[\s,;.]+$/,'').trim();
+  const street=base.includes(',')?base.split(',').slice(1).join(',').trim():'';      // drops a leading venue name
+  const hasCity=new RegExp(HOME_CITY,'i').test(base)||/\b\d{5}\b/.test(base);
+  const tries=[...new Set([
+    base,
+    hasCity?null:base+', '+HOME_CITY,
+    street||null,
+    street&&!hasCity?street+', '+HOME_CITY:null
+  ].filter(Boolean))];
+  for(let i=0;i<tries.length;i++){
+    if(i>0)await new Promise(r=>setTimeout(r,1100));   // OSM asks for max 1 lookup per second
+    const hit=await tryGeocode(tries[i]);
+    if(hit)return hit;
+  }
   throw new Error('not found');
 }
 
@@ -327,6 +353,7 @@ const CATS={
   talk:   {label:'Talk',   color:'#3B6FD4'},   // medium blue
   exhibit:{label:'Exhibit',color:'#7E57C2'},   // medium purple
   opening:{label:'Opening',color:'#E0A400'},   // medium yellow
+  workshop:{label:'Workshop',color:'#6FB1E8'}, // light blue
   food:   {label:'Food',   color:'#E8752A'},   // orange
   place:  {label:'Place',  color:'#2E8B57'},   // green
   draw:   {label:'Draw',   color:'#1C1C1C'},   // black
@@ -537,8 +564,9 @@ $('#savebtn').onclick=async()=>{
   if(!ev.date){toast('A date is required');return}
   if(!ev.title)ev.title=ev.desc.split('\n')[0].slice(0,60)||'Event';
   if(!ev.lat&&ev.address){
+    toast('Looking up address\u2026');
     try{const c=await geocode(ev.address);ev.lat=c.lat;ev.lng=c.lng;toast('Address pinned \u{1F4CD}')}
-    catch(_){toast('Address not found — open the event to set a pin')}
+    catch(_){toast('Address not found — open the event and tap the map to set a pin')}
   }
   const i=events.findIndex(x=>x.id===ev.id);
   if(i>=0)events[i]=ev; else events.push(ev);
@@ -571,6 +599,13 @@ function openDetail(id){
   $('#d-apple').onclick=()=>has?appleRoute(e.lat,e.lng):toast('No pin set — edit the event');
   $('#d-google').onclick=()=>has?googleRoute(e.lat,e.lng):toast('No pin set — edit the event');
   $('#d-edit').onclick=()=>{closeSheets();openEditor(e)};
+  $('#d-share').onclick=()=>{                     // shares event info — your "My notes" stay private
+    const parts=[e.title, fmtWhen(e), e.address||'', '',
+      e.desc||'', e.lat?`Map: https://maps.google.com/?q=${e.lat},${e.lng}`:''].filter(s=>s!=='');
+    const text=parts.join('\n');
+    if(navigator.share) navigator.share({title:e.title,text}).catch(()=>{});
+    else navigator.clipboard.writeText(text).then(()=>toast('Copied — paste it anywhere'));
+  };
   $('#detail').classList.add('open');
 }
 $('#d-close').onclick=closeSheets;
