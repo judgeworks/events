@@ -599,10 +599,11 @@ function openDetail(id){
   $('#d-apple').onclick=()=>has?appleRoute(e.lat,e.lng):toast('No pin set — edit the event');
   $('#d-google').onclick=()=>has?googleRoute(e.lat,e.lng):toast('No pin set — edit the event');
   $('#d-edit').onclick=()=>{closeSheets();openEditor(e)};
-  $('#d-share').onclick=()=>{                     // shares event info — your "My notes" stay private
-    const parts=[e.title, fmtWhen(e), e.address||'', '',
-      e.desc||'', e.lat?`Map: https://maps.google.com/?q=${e.lat},${e.lng}`:''].filter(s=>s!=='');
-    const text=parts.join('\n');
+  $('#d-share').onclick=()=>{                     // shares the essentials — event text and "My notes" stay private
+    const mapLink=e.address?`https://maps.google.com/?q=${encodeURIComponent(e.address)}`
+                 :(e.lat?`https://maps.google.com/?q=${e.lat},${e.lng}`:'');
+    const text=[e.title,'\u{1F4C5} '+fmtWhen(e),
+      e.address?'\u{1F4CD} '+e.address:'', mapLink].filter(Boolean).join('\n');
     if(navigator.share) navigator.share({title:e.title,text}).catch(()=>{});
     else navigator.clipboard.writeText(text).then(()=>toast('Copied — paste it anywhere'));
   };
