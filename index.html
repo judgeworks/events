@@ -289,7 +289,11 @@ function parseTime(t){
   return '';
 }
 const STREET=/\b\d+\s+\S+.*\b(street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|way|square|plaza|platz|stra(ss|ß)e|gasse|weg)\b/i;
-const STREET2=/(\S*(stra(ss|ß)e|gasse|platz|weg)|\b(street|avenue|road|boulevard|lane|square|plaza))\b.*\d+/i;
+const STREET2=/(\S*(stra(ss|ß)e|gasse|platz|weg)|\b(street|avenue|road|boulevard|lane|square|plaza))\b.*?\b\d{1,4}[a-z]?\b/i; // digit must be a standalone house number, not buried in a username
+const JUNKLINE=/^(posts?|reels?|stories|follow(ing)?|followers?|home|explore|search|more|sponsored|suggested for you|liked by.*)$/i;
+const NUMERICLINE=/^[\d\s:.,%·+\-]+$/;                    // status-bar clock, battery, like counts
+const goodLines=t=>t.split('\n').map(s=>s.trim())
+  .filter(l=>l.length>2&&!JUNKLINE.test(l)&&!NUMERICLINE.test(l));
 function parseAddress(t){
   const lines=t.split('\n');
   const clean=s=>s.replace(/[\s,;.]+$/,'').trim();
@@ -309,7 +313,7 @@ function parseAddress(t){
   return '';
 }
 function parseAll(text){
-  const lines=text.split('\n').map(s=>s.trim()).filter(Boolean);
+  const lines=goodLines(text);                                                        // junk lines (clock, Posts, Follow…) skipped
   const title=(lines[0]||'').replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu,'').trim().slice(0,80);
   return {title, date:parseDate(text), time:parseTime(text), address:parseAddress(text), desc:text.trim()};
 }
@@ -329,10 +333,10 @@ async function geocode(addr){
   const street=base.includes(',')?base.split(',').slice(1).join(',').trim():'';      // drops a leading venue name
   const hasCity=new RegExp(HOME_CITY,'i').test(base)||/\b\d{5}\b/.test(base);
   const tries=[...new Set([
+    hasCity?null:base+', '+HOME_CITY,     // city-anchored first, so a street name can't land in another city
     base,
-    hasCity?null:base+', '+HOME_CITY,
-    street||null,
-    street&&!hasCity?street+', '+HOME_CITY:null
+    street&&!hasCity?street+', '+HOME_CITY:null,
+    street||null
   ].filter(Boolean))];
   for(let i=0;i<tries.length;i++){
     if(i>0)await new Promise(r=>setTimeout(r,1100));   // OSM asks for max 1 lookup per second
