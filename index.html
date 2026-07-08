@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Events</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Events">
+<meta name="theme-color" content="#FBFAF7">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --paper:#FBFAF7; --card:#FFFFFF; --ink:#20242C; --ink2:#6B7280;
+  --line:#E8E6DF; --accent:#0F766E; --accent-soft:#E4F2EF;
+  --star:#F59E0B; --star-soft:#FEF3C7; --danger:#B4433A;
+  --radius:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+  font:16px/1.45 -apple-system,system-ui,sans-serif;
+  height:100%;overscroll-behavior-y:none}
+h1,h2,h3,.daynum,.tab span{font-family:ui-rounded,-apple-system,system-ui,sans-serif}
+
+/* ---------- header ---------- */
+header{position:sticky;top:0;z-index:500;background:var(--paper);
+  padding:calc(env(safe-area-inset-top) + 10px) 20px 8px}
+header h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em}
+header .sub{color:var(--ink2);font-size:13px;margin-top:2px}
+
+/* ---------- views ---------- */
+.view{display:none;padding:4px 16px 120px}
+.view.active{display:block}
+#view-map{padding:0}
+#map{position:fixed;inset:0;bottom:calc(74px + env(safe-area-inset-bottom));display:none;z-index:1}
+body.mapmode #map{display:block}
+body.mapmode header{display:none}
+
+/* ---------- day groups ---------- */
+.daygroup{display:flex;gap:14px;margin:18px 4px 0}
+.dayrail{width:52px;flex:none;text-align:center;padding-top:4px}
+.daynum{font-size:30px;font-weight:800;line-height:1}
+.daymon{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2)}
+.daywk{font-size:11px;color:var(--ink2)}
+.daycards{flex:1;min-width:0}
+.daychip{display:inline-flex;align-items:center;gap:6px;margin:6px 0 2px;
+  background:var(--accent-soft);color:var(--accent);border:none;border-radius:999px;
+  padding:6px 12px;font-size:13px;font-weight:600}
+.today .daynum{color:var(--accent)}
+
+/* ---------- event card ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start}
+.card .body{flex:1;min-width:0}
+.card .t{font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta{color:var(--ink2);font-size:13px;margin-top:2px;display:flex;gap:10px;flex-wrap:wrap}
+.card .meta .time{color:var(--accent);font-weight:600}
+.card.prio{border-color:var(--star);box-shadow:0 0 0 1px var(--star) inset}
+.star{flex:none;width:40px;height:40px;border-radius:12px;border:none;background:transparent;
+  font-size:22px;color:#D8D5CC;padding:0}
+.card.prio .star{color:var(--star)}
+.pinbadge{font-size:12px}
+
+/* ---------- empty state ---------- */
+.empty{margin:60px 24px;text-align:center;color:var(--ink2)}
+.empty .big{font-size:44px;margin-bottom:10px}
+.empty b{color:var(--ink)}
+
+/* ---------- tab bar ---------- */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--card);
+  border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;
+  padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+.tab{flex:1;border:none;background:none;color:var(--ink2);font-size:11px;padding:4px 0}
+.tab .ic{font-size:22px;display:block;line-height:1.2}
+.tab.on{color:var(--accent);font-weight:700}
+#addbtn{flex:none;width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);
+  color:#fff;font-size:30px;line-height:1;margin:-24px 6px 0;box-shadow:0 4px 12px rgba(15,118,110,.35)}
+
+/* ---------- sheets ---------- */
+.sheet{position:fixed;inset:0;z-index:900;display:none;background:rgba(30,36,44,.35)}
+.sheet.open{display:block}
+.sheet .panel{position:absolute;left:0;right:0;bottom:0;max-height:92%;overflow-y:auto;
+  background:var(--paper);border-radius:22px 22px 0 0;
+  padding:14px 18px calc(24px + env(safe-area-inset-bottom))}
+.grab{width:38px;height:5px;border-radius:3px;background:#D8D5CC;margin:0 auto 12px}
+.panel h2{margin:0 0 12px;font-size:21px;font-weight:800}
+label{display:block;font-size:12px;font-weight:700;color:var(--ink2);
+  text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px}
+input[type=text],input[type=date],input[type=time],textarea{
+  width:100%;border:1px solid var(--line);border-radius:12px;background:var(--card);
+  padding:12px;font:inherit;color:var(--ink)}
+textarea{min-height:70px;resize:vertical}
+.row2{display:flex;gap:10px}.row2>div{flex:1}
+.btn{display:block;width:100%;border:none;border-radius:14px;padding:14px;margin-top:14px;
+  font:inherit;font-weight:700;font-size:16px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.quiet{background:var(--card);border:1px solid var(--line);color:var(--ink)}
+.btn.warn{background:none;color:var(--danger)}
+.checkline{display:flex;align-items:center;gap:10px;margin-top:16px;font-weight:600}
+.checkline input{width:22px;height:22px;accent-color:var(--star)}
+#pastewrap{background:var(--accent-soft);border-radius:14px;padding:12px;margin-bottom:4px}
+#pastewrap textarea{background:#fff}
+#pastewrap .hint{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
+
+/* ---------- detail sheet ---------- */
+#detail .t{font-size:22px;font-weight:800;margin:0 0 4px}
+#detail .when{color:var(--accent);font-weight:700}
+#detail .addr{color:var(--ink2);margin:8px 0}
+#detail .desc{white-space:pre-wrap;font-size:14.5px;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;max-height:180px;overflow-y:auto}
+.routegrid{display:flex;gap:10px;margin-top:14px}
+.routegrid .btn{margin-top:0}
+
+/* ---------- pin picker ---------- */
+#pinmap{height:300px;border-radius:14px;margin-top:6px}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:1000;
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;
+  opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="pagetitle">Upcoming</h1>
+  <div class="sub" id="pagesub"></div>
+</header>
+
+<main>
+  <section id="view-upcoming" class="view active"></section>
+  <section id="view-past" class="view"></section>
+  <section id="view-map" class="view"></section>
+</main>
+<div id="map"></div>
+
+<nav>
+  <button class="tab on" data-view="upcoming"><span class="ic">&#9776;</span><span>Upcoming</span></button>
+  <button id="addbtn" aria-label="Add event">+</button>
+  <button class="tab" data-view="map"><span class="ic">&#128506;</span><span>Map</span></button>
+  <button class="tab" data-view="past"><span class="ic">&#10003;</span><span>Past</span></button>
+</nav>
+
+<!-- ============ add / edit sheet ============ -->
+<div class="sheet" id="editor">
+ <div class="panel">
+  <div class="grab"></div>
+  <h2 id="ed-title">New event</h2>
+
+  <div id="pastewrap">
+    <div class="hint">Paste event text — date, time and address are detected automatically</div>
+    <textarea id="pastebox" placeholder="Paste caption, message or webpage text here…"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn quiet" id="clipbtn" style="margin-top:8px">&#128203; Paste &amp; detect</button>
+      <button class="btn quiet" id="parsebtn" style="margin-top:8px">Detect details</button>
+    </div>
+  </div>
+
+  <label>Title</label><input type="text" id="f-title">
+  <div class="row2">
+    <div><label>Date</label><input type="date" id="f-date"></div>
+    <div><label>Time</label><input type="time" id="f-time"></div>
+  </div>
+  <label>Address / place</label><input type="text" id="f-addr" placeholder="Street 12, City">
+  <label>Notes</label><textarea id="f-desc"></textarea>
+  <div class="checkline"><input type="checkbox" id="f-prio"><span>&#9733; Priority event</span></div>
+
+  <label>Map pin</label>
+  <div id="pinstatus" style="font-size:13px;color:var(--ink2)">No pin yet — saved address will be looked up, or tap the map to place one.</div>
+  <div id="pinmap"></div>
+
+  <button class="btn primary" id="savebtn">Save event</button>
+  <button class="btn warn" id="deletebtn" style="display:none">Delete event</button>
+  <button class="btn quiet" id="cancelbtn">Cancel</button>
+ </div>
+</div>
+
+<!-- ============ detail sheet ============ -->
+<div class="sheet" id="detail">
+ <div class="panel">
+  <div class="grab"></div>
+  <p class="t" id="d-title"></p>
+  <div class="when" id="d-when"></div>
+  <div class="addr" id="d-addr"></div>
+  <div class="desc" id="d-desc"></div>
+  <div class="routegrid">
+    <button class="btn quiet" id="d-apple">&#63743; Maps route</button>
+    <button class="btn quiet" id="d-google">G Maps route</button>
+  </div>
+  <button class="btn primary" id="d-edit">Edit</button>
+  <button class="btn quiet" id="d-close">Close</button>
+ </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* =========================================================
+   STORAGE — everything lives in this phone's localStorage.
+   ========================================================= */
+const KEY='events.v1';
+let events=[];
+function load(){try{events=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){events=[]}}
+function persist(){localStorage.setItem(KEY,JSON.stringify(events))}
+load();
+
+/* =========================================================
+   DATE / TIME / ADDRESS PARSER  (all on-device)
+   ========================================================= */
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+const WDAYS={sunday:0,monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6};
+const pad=n=>String(n).padStart(2,'0');
+const iso=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
+function todayISO(){const t=new Date();return iso(t.getFullYear(),t.getMonth()+1,t.getDate())}
+
+function bumpYearIfPast(y,m,d){                    // no year given & date already gone → assume next year
+  const now=new Date(); const cand=new Date(y,m-1,d);
+  if(cand < new Date(now.getFullYear(),now.getMonth(),now.getDate()-1)) y+=1;
+  return iso(y,m,d);
+}
+function parseDate(t){
+  const now=new Date(), Y=now.getFullYear();
+  let m;
+  if(m=t.match(/(\d{4})-(\d{2})-(\d{2})/)) return iso(+m[1],+m[2],+m[3]);            // 2026-07-12
+  if(m=t.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/)){                              // 12.07.26  (day.month — European)
+    let y=+m[3]; if(y<100)y+=2000; return iso(y,+m[2],+m[1]); }
+  if(m=t.match(/\b(\d{1,2})\.(\d{1,2})\.?(?!\d)/)) return bumpYearIfPast(Y,+m[2],+m[1]);
+  if(m=t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/)){                         // 7/12 = month/day (US) — swap m[1]/m[2] below for EU style
+    let mo=+m[1],da=+m[2],y=m[3]?+m[3]:0; if(y&&y<100)y+=2000;
+    if(mo>12&&da<=12){[mo,da]=[da,mo]}                                                // 13/7 can only be day/month
+    return y?iso(y,mo,da):bumpYearIfPast(Y,mo,da); }
+  const mn='(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*';
+  if(m=t.match(new RegExp('\\b'+mn+'\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?','i'))){ // July 12, 2026
+    const mo=MONTHS[m[1].slice(0,3).toLowerCase()];
+    return m[3]?iso(+m[3],mo,+m[2]):bumpYearIfPast(Y,mo,+m[2]); }
+  if(m=t.match(new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?'+mn+'(?:\\s+(\\d{4}))?','i'))){ // 12 July
+    const mo=MONTHS[m[2].slice(0,3).toLowerCase()];
+    return m[3]?iso(+m[3],mo,+m[1]):bumpYearIfPast(Y,mo,+m[1]); }
+  if(/\btoday\b/i.test(t)) return todayISO();
+  if(/\btomorrow\b/i.test(t)){const d=new Date(Date.now()+864e5);return iso(d.getFullYear(),d.getMonth()+1,d.getDate())}
+  for(const w in WDAYS){ if(new RegExp('\\b'+w+'\\b','i').test(t)){                   // "Saturday" → next Saturday
+      const d=new Date(); let diff=(WDAYS[w]-d.getDay()+7)%7; if(diff===0)diff=7;
+      d.setDate(d.getDate()+diff); return iso(d.getFullYear(),d.getMonth()+1,d.getDate()); } }
+  return '';
+}
+function parseTime(t){
+  let m;
+  if(m=t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)){                            // 7pm / 7:30 PM
+    let h=+m[1]%12; if(/pm/i.test(m[3]))h+=12; return pad(h)+':'+(m[2]||'00'); }
+  if(m=t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)) return pad(+m[1])+':'+m[2];        // 19:00
+  return '';
+}
+const STREET=/\b\d+\s+\S+.*\b(street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|way|square|plaza|platz|stra(ss|ß)e|gasse|weg)\b/i;
+const STREET2=/(\S*(stra(ss|ß)e|gasse|platz|weg)|\b(street|avenue|road|boulevard|lane|square|plaza))\b.*\d+/i;
+function parseAddress(t){
+  for(const raw of t.split('\n')){
+    const line=raw.trim();
+    if(!line) continue;
+    if(line.startsWith('\u{1F4CD}')) return line.replace('\u{1F4CD}','').trim();     // 📍 line wins
+    if(/^(location|address|venue|where)\s*[:\-]/i.test(line)) return line.replace(/^[^:\-]*[:\-]/,'').trim();
+    if(STREET.test(line)||STREET2.test(line)) return line;
+  }
+  return '';
+}
+function parseAll(text){
+  const lines=text.split('\n').map(s=>s.trim()).filter(Boolean);
+  const title=(lines[0]||'').replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu,'').trim().slice(0,80);
+  return {title, date:parseDate(text), time:parseTime(text), address:parseAddress(text), desc:text.trim()};
+}
+
+/* =========================================================
+   GEOCODING — one anonymous lookup per saved address (OSM
+   Nominatim, no key, no account). Manual pin always available.
+   ========================================================= */
+async function geocode(addr){
+  const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(addr));
+  const j=await r.json();
+  if(j&&j[0]) return {lat:+j[0].lat,lng:+j[0].lon};
+  throw new Error('not found');
+}
+
+/* =========================================================
+   RENDERING
+   ========================================================= */
+const $=s=>document.querySelector(s);
+const fmtWhen=e=>{
+  const d=new Date(e.date+'T12:00');
+  const ds=d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+  return e.time? ds+' \u00B7 '+e.time : ds;
+};
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
+
+function groupByDay(list){
+  const g={}; list.forEach(e=>{(g[e.date]=g[e.date]||[]).push(e)});
+  return Object.keys(g).sort().map(d=>({date:d,items:g[d].sort((a,b)=>
+    (b.prio-a.prio)||(a.time||'99').localeCompare(b.time||'99'))}));
+}
+function cardHTML(e){
+  return `<div class="card ${e.prio?'prio':''}" data-id="${e.id}">
+    <div class="body" onclick="openDetail('${e.id}')">
+      <div class="t">${esc(e.title)||'(untitled)'}</div>
+      <div class="meta">
+        ${e.time?`<span class="time">${e.time}</span>`:''}
+        ${e.address?`<span>${esc(e.address).slice(0,40)}</span>`:''}
+        ${e.lat?'<span class="pinbadge">\u{1F4CD}</span>':''}
+      </div>
+    </div>
+    <button class="star" onclick="togglePrio('${e.id}')" aria-label="Toggle priority">\u2605</button>
+  </div>`;
+}
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function renderList(view){
+  const today=todayISO();
+  const list=events.filter(e=>view==='past'? e.date<today : e.date>=today);
+  const box=$('#view-'+view);
+  if(!list.length){
+    box.innerHTML=`<div class="empty"><div class="big">${view==='past'?'\u2713':'\u{1F5D3}'}</div>
+      ${view==='past'?'Past events will collect here.':'<b>Nothing saved yet.</b><br>Tap + and paste any event text —<br>date, time and address are detected for you.'}</div>`;
+    return;
+  }
+  const days=groupByDay(list); if(view==='past')days.reverse();
+  box.innerHTML=days.map(g=>{
+    const d=new Date(g.date+'T12:00');
+    const pinned=g.items.filter(e=>e.lat);
+    const chip=(view!=='past'&&pinned.length>1)
+      ?`<button class="daychip" onclick="routeDay('${g.date}')">\u{1F9ED} Map this day (${pinned.length} stops)</button>`:'';
+    return `<div class="daygroup ${g.date===today?'today':''}">
+      <div class="dayrail">
+        <div class="daywk">${d.toLocaleDateString(undefined,{weekday:'short'})}</div>
+        <div class="daynum">${d.getDate()}</div>
+        <div class="daymon">${d.toLocaleDateString(undefined,{month:'short'})}</div>
+      </div>
+      <div class="daycards">${g.items.map(cardHTML).join('')}${chip}</div>
+    </div>`;
+  }).join('');
+}
+function renderAll(){renderList('upcoming');renderList('past');drawPins();
+  $('#pagesub').textContent=events.filter(e=>e.date>=todayISO()).length+' upcoming'}
+
+/* =========================================================
+   MAP TAB
+   ========================================================= */
+let map,pinLayer;
+function ensureMap(){
+  if(map)return;
+  map=L.map('map',{zoomControl:false}).setView([52.52,13.405],11);   // start view — adjust to your city
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {attribution:'\u00A9 OpenStreetMap'}).addTo(map);
+  pinLayer=L.layerGroup().addTo(map);
+}
+function drawPins(){
+  if(!map)return;
+  pinLayer.clearLayers();
+  const pts=[];
+  events.filter(e=>e.lat&&e.date>=todayISO()).forEach(e=>{
+    const c=e.prio?'#F59E0B':'#0F766E';
+    const mk=L.circleMarker([e.lat,e.lng],{radius:10,color:'#fff',weight:2,fillColor:c,fillOpacity:1})
+      .addTo(pinLayer).bindPopup(
+        `<b>${esc(e.title)}</b><br>${fmtWhen(e)}<br>
+         <a href="#" onclick="openDetail('${e.id}');return false">Open</a>`);
+    pts.push([e.lat,e.lng]);
+  });
+  if(pts.length)map.fitBounds(pts,{padding:[40,40],maxZoom:14});
+}
+
+/* =========================================================
+   ROUTING — hands off to the maps app (best directions live there)
+   ========================================================= */
+function appleRoute(lat,lng){location.href=`https://maps.apple.com/?daddr=${lat},${lng}`}
+function googleRoute(lat,lng){location.href=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
+function routeDay(date){                       // multi-stop route through all pinned events of that day
+  const pts=events.filter(e=>e.date===date&&e.lat)
+    .sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'))
+    .map(e=>e.lat+','+e.lng);
+  const dest=pts.pop();
+  location.href=`https://www.google.com/maps/dir/?api=1&destination=${dest}`+
+    (pts.length?`&waypoints=${pts.join('|')}`:'');
+}
+
+/* =========================================================
+   EDITOR SHEET
+   ========================================================= */
+let editId=null,pinMap,pinMarker,pinLatLng=null;
+function openEditor(e){
+  editId=e?e.id:null;
+  $('#ed-title').textContent=e?'Edit event':'New event';
+  $('#pastebox').value=''; $('#pastewrap').style.display=e?'none':'block';
+  $('#f-title').value=e?e.title:'';
+  $('#f-date').value=e?e.date:'';
+  $('#f-time').value=e?e.time:'';
+  $('#f-addr').value=e?e.address:'';
+  $('#f-desc').value=e?e.desc:'';
+  $('#f-prio').checked=e?!!e.prio:false;
+  pinLatLng=e&&e.lat?{lat:e.lat,lng:e.lng}:null;
+  $('#deletebtn').style.display=e?'block':'none';
+  $('#editor').classList.add('open');
+  setTimeout(initPinMap,150);
+}
+function initPinMap(){
+  if(!pinMap){
+    pinMap=L.map('pinmap').setView([52.52,13.405],10);               // pin-picker start view — adjust to your city
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pinMap);
+    pinMap.on('click',ev=>setPin(ev.latlng));
+  }
+  pinMap.invalidateSize();
+  if(pinMarker){pinMap.removeLayer(pinMarker);pinMarker=null}
+  if(pinLatLng){setPin(pinLatLng);pinMap.setView(pinLatLng,14)}
+  updatePinStatus();
+}
+function setPin(ll){
+  pinLatLng={lat:+ll.lat.toFixed(6),lng:+ll.lng.toFixed(6)};
+  if(pinMarker)pinMarker.setLatLng(pinLatLng);
+  else pinMarker=L.marker(pinLatLng).addTo(pinMap);
+  updatePinStatus();
+}
+function updatePinStatus(){
+  $('#pinstatus').textContent=pinLatLng
+    ?'Pin set \u2713 (tap map to move it)'
+    :'No pin yet — saved address will be looked up, or tap the map to place one.';
+}
+$('#clipbtn').onclick=async()=>{                 // one-tap intake from the OCR Shortcut
+  try{
+    const t=await navigator.clipboard.readText();  // iOS shows a small paste-permission bubble — tap Allow
+    if(!t.trim()){toast('Clipboard is empty');return}
+    $('#pastebox').value=t;
+    $('#parsebtn').click();
+  }catch(_){toast('Paste blocked — long-press the box and Paste instead')}
+};
+$('#parsebtn').onclick=()=>{
+  const t=$('#pastebox').value; if(!t.trim()){toast('Paste some text first');return}
+  const p=parseAll(t);
+  $('#f-title').value=p.title; $('#f-date').value=p.date;
+  $('#f-time').value=p.time;   $('#f-addr').value=p.address;
+  $('#f-desc').value=p.desc;
+  toast((p.date?'Date found':'No date found — set it below')+(p.address?', address found':''));
+};
+$('#savebtn').onclick=async()=>{
+  const ev={
+    id:editId||('e'+Date.now()),
+    title:$('#f-title').value.trim(),
+    date:$('#f-date').value,
+    time:$('#f-time').value,
+    address:$('#f-addr').value.trim(),
+    desc:$('#f-desc').value.trim(),
+    prio:$('#f-prio').checked,
+    lat:pinLatLng?pinLatLng.lat:null,
+    lng:pinLatLng?pinLatLng.lng:null
+  };
+  if(!ev.date){toast('A date is required');return}
+  if(!ev.title)ev.title=ev.desc.split('\n')[0].slice(0,60)||'Event';
+  if(!ev.lat&&ev.address){
+    try{const c=await geocode(ev.address);ev.lat=c.lat;ev.lng=c.lng;toast('Address pinned \u{1F4CD}')}
+    catch(_){toast('Address not found — open the event to set a pin')}
+  }
+  const i=events.findIndex(x=>x.id===ev.id);
+  if(i>=0)events[i]=ev; else events.push(ev);
+  persist();renderAll();closeSheets();
+};
+$('#deletebtn').onclick=()=>{
+  events=events.filter(x=>x.id!==editId);persist();renderAll();closeSheets();toast('Deleted');
+};
+$('#cancelbtn').onclick=closeSheets;
+
+/* =========================================================
+   DETAIL SHEET
+   ========================================================= */
+let detailId=null;
+function openDetail(id){
+  const e=events.find(x=>x.id===id); if(!e)return;
+  detailId=id;
+  $('#d-title').textContent=e.title;
+  $('#d-when').textContent=fmtWhen(e)+(e.prio?'  \u2605 priority':'');
+  $('#d-addr').textContent=e.address||'No address';
+  $('#d-desc').textContent=e.desc||'';
+  const has=!!e.lat;
+  $('#d-apple').style.opacity=$('#d-google').style.opacity=has?1:.4;
+  $('#d-apple').onclick=()=>has?appleRoute(e.lat,e.lng):toast('No pin set — edit the event');
+  $('#d-google').onclick=()=>has?googleRoute(e.lat,e.lng):toast('No pin set — edit the event');
+  $('#d-edit').onclick=()=>{closeSheets();openEditor(e)};
+  $('#detail').classList.add('open');
+}
+$('#d-close').onclick=closeSheets;
+function togglePrio(id){
+  const e=events.find(x=>x.id===id); if(!e)return;
+  e.prio=!e.prio; persist(); renderAll();
+}
+function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'))}
+document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',ev=>{if(ev.target===s)closeSheets()}));
+
+/* =========================================================
+   NAV
+   ========================================================= */
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  const v=b.dataset.view;
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active','view-'+v===x.id));
+  document.body.classList.toggle('mapmode',v==='map');
+  $('#pagetitle').textContent=v==='map'?'Map':v[0].toUpperCase()+v.slice(1);
+  if(v==='map'){ensureMap();setTimeout(()=>{map.invalidateSize();drawPins()},100)}
+});
+$('#addbtn').onclick=()=>openEditor(null);
+
+/* =========================================================
+   SHARE INTAKE — the Apple Shortcut opens:  index.html?add=TEXT
+   ========================================================= */
+(function(){
+  const q=new URLSearchParams(location.search);
+  const shared=q.get('add');
+  if(shared){
+    history.replaceState(null,'',location.pathname);   // clean the URL so a reload doesn't re-add
+    openEditor(null);
+    $('#pastebox').value=shared;
+    $('#parsebtn').click();
+  }
+})();
+
+renderAll();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "Events",
+  "short_name": "Events",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBFAF7",
+  "theme_color": "#FBFAF7",
+  "icons": [
+    { "src": "icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
