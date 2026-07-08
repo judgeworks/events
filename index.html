@@ -221,7 +221,8 @@ textarea{min-height:70px;resize:vertical}
   <h2 id="r-title">Plan route</h2>
   <div style="font-size:13px;color:var(--ink2);margin-bottom:8px">Tap events in the order you want to travel. Tap again to remove.</div>
   <div id="r-list"></div>
-  <button class="btn primary" id="r-go">Open route in Google Maps</button>
+  <button class="btn primary" id="r-go">Full route — drive / walk / bike</button>
+  <button class="btn quiet" id="r-transit">Transit — leg by leg</button>
   <button class="btn quiet" id="r-close">Close</button>
  </div>
 </div>
@@ -488,6 +489,21 @@ $('#r-go').onclick=()=>{
   const dest=pts.pop();
   location.href=`https://www.google.com/maps/dir/?api=1&destination=${dest}&waypoints=${pts.join('|')}`;
 };
+$('#r-transit').onclick=()=>{                     // Google refuses waypoints in transit mode, so: one leg at a time
+  if(routeSel.length<2){toast('Pick at least two stops');return}
+  const sel=routeSel.map(id=>events.find(x=>x.id===id));
+  $('#r-list').innerHTML=sel.slice(0,-1).map((a,i)=>{
+    const b=sel[i+1];
+    return `<div class="rrow sel" onclick="openLeg(${a.lat},${a.lng},${b.lat},${b.lng})">
+      <div class="ord">${i+1}</div>
+      <div class="nm">${esc(a.title).slice(0,16)} \u2192 ${esc(b.title).slice(0,16)}</div>
+      <div class="tm">\u{1F687}</div>
+    </div>`;
+  }).join('')+`<div class="rrow" onclick="renderRouteList()"><div class="ord">\u2190</div><div class="nm">Back to stop order</div></div>`;
+};
+function openLeg(olat,olng,dlat,dlng){
+  location.href=`https://www.google.com/maps/dir/?api=1&origin=${olat},${olng}&destination=${dlat},${dlng}&travelmode=transit`;
+}
 $('#r-close').onclick=closeSheets;
 
 /* =========================================================
