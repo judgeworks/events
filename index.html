@@ -282,8 +282,8 @@ function parseDate(t){
 function parseTime(t){
   let m;
   if(m=t.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b/i)) return pad(+m[1]%24)+':'+(m[2]||'00'); // 19 Uhr / 19.30 Uhr
-  if(m=t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)){                            // 7pm / 7:30 PM
-    let h=+m[1]%12; if(/pm/i.test(m[3]))h+=12; return pad(h)+':'+(m[2]||'00'); }
+  if(m=t.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?m\.?(?![a-z])/i)){            // 7pm / 7 p.m. / 7.30pm
+    let h=+m[1]%12; if(/p/i.test(m[3]))h+=12; return pad(h)+':'+(m[2]||'00'); }
   if(m=t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)) return pad(+m[1])+':'+m[2];        // 19:00
   return '';
 }
@@ -319,12 +319,18 @@ async function geocode(addr){
 /* =========================================================
    RENDERING
    ========================================================= */
-/* Event categories — rename or recolor here; add lines for new types */
+/* Event categories — rename or recolor here; add lines for new types.
+   Format:  key: {label:'Shown name', color:'#hex'},   */
 const CATS={
-  other:  {label:'Other',   color:'#0F766E'},   // teal
-  art:    {label:'Art show',color:'#C4453C'},   // red
-  concert:{label:'Concert', color:'#E0A400'},   // yellow
-  lecture:{label:'Lecture', color:'#2E8B57'}    // green
+  art:    {label:'Art',    color:'#C4453C'},   // medium red
+  sound:  {label:'Sound',  color:'#F0348C'},   // bright pink
+  talk:   {label:'Talk',   color:'#3B6FD4'},   // medium blue
+  exhibit:{label:'Exhibit',color:'#7E57C2'},   // medium purple
+  opening:{label:'Opening',color:'#E0A400'},   // medium yellow
+  food:   {label:'Food',   color:'#E8752A'},   // orange
+  place:  {label:'Place',  color:'#2E8B57'},   // green
+  draw:   {label:'Draw',   color:'#1C1C1C'},   // black
+  other:  {label:'Other',  color:'#0F766E'}    // teal (default)
 };
 const catColor=e=>(CATS[e.cat]||CATS.other).color;
 const $=s=>document.querySelector(s);
@@ -400,10 +406,12 @@ function drawPins(){
   pinLayer.clearLayers();
   const pts=[];
   events.filter(e=>e.lat&&e.date>=todayISO()).forEach(e=>{
+    if(e.prio)                                          // priority halo — reads on any pin color
+      L.circleMarker([e.lat,e.lng],{radius:17,fill:false,color:'#20242C',weight:2.5})
+        .addTo(pinLayer);
     const mk=L.circleMarker([e.lat,e.lng],{
-      radius:e.prio?13:9,                             // priority pins are bigger
-      color:e.prio?'#20242C':'#fff',                  // priority ring is dark ink, normal is white
-      weight:e.prio?3:2,
+      radius:e.prio?12:9,
+      color:'#fff',weight:2,
       fillColor:catColor(e),fillOpacity:1})
       .addTo(pinLayer).bindPopup(
         `<b>${esc(e.title)}</b><br>${fmtWhen(e)}<br>
