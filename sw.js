@@ -1,5 +1,5 @@
-// Offline cache: app shell + Leaflet. Map tiles still need network.
-const C = 'events-v1';
+// Offline cache. Page loads network-first (so updates arrive), assets cache-first.
+const C = 'events-v2';
 const SHELL = [
   './', './index.html', './manifest.json', './icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -14,7 +14,15 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request))
-  );
+  if (e.request.mode === 'navigate') {                       // the app page: try network, fall back to cache offline
+    e.respondWith(
+      fetch(e.request).then(r => {
+        const copy = r.clone();
+        caches.open(C).then(c => c.put(e.request, copy));
+        return r;
+      }).catch(() => caches.match(e.request).then(h => h || caches.match('./index.html')))
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
 });
